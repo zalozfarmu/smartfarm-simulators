@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="cs">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Device Simulator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="shared/server-selector.css">
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="shared/config.js"></script>
+    <script src="shared/server-selector.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>🤖 ESP32 Device Simulator</h1>
+                <p>Simulace fyzického SmartCoop zařízení</p>
+            </div>
+            <div class="header-right">
+                <div class="header-nav">
+                    <a href="../index.html">🏠 Úvod</a>
+                    <a href="../mqtt-management/index.html">🔧 Management</a>
+                    <a href="../mqtt-dashboard/index.html">📊 Dashboard</a>
+                    <a href="../camera-simulator/index.html">📹 Camera Sim</a>
+                </div>
+                <span id="currentUserBadge" class="user-badge" style="display:none; margin-right: 10px;">
+                    👤 <span id="currentUserEmail">-</span>
+                    <button class="btn-link" onclick="handleLogout()" style="margin-left:8px;">Logout</button>
+                </span>
+                <span id="deviceStatus" class="status-badge offline">⚫ OFFLINE</span>
+            </div>
+        </div>
+
+        <div class="server-status-banner" data-server-status></div>
+
+        <!-- Server Selector -->
+        <!-- Server Selector -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h3>🌐 Výběr serveru</h3>
+            <div class="form-group">
+                <label for="serverProfile">Profil serveru</label>
+                <select id="serverProfile" class="form-control" onchange="changeServerProfile(this.value)">
+                    <option value="local">🐋 Lokální Docker</option>
+                    <option value="production">🌐 VPS (Produkce)</option>
+                    <option value="custom">⚙️ Vlastní nastavení</option>
+                </select>
+            </div>
+
+            <div id="serverInfo"
+                style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span style="color: #64748b; font-size: 12px;">MQTT Broker:</span>
+                    <code id="mqttUrlDisplay" style="font-size: 12px; color: #0f172a;">-</code>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #64748b; font-size: 12px;">API:</span>
+                    <code id="apiUrlDisplay" style="font-size: 12px; color: #0f172a;">-</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Card -->
+        <div class="card">
+            <h2>🔌 Připojení</h2>
+
+            <div class="form-group">
+                <label>Zařízení z Management Console</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select id="deviceSelect" class="form-control" style="flex: 1;">
+                        <option value="">-- Vyberte zařízení --</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary btn-small" onclick="refreshDevices()"
+                        title="Obnovit seznam zařízení z API" id="refreshDevicesBtn">
+                        🔄
+                    </button>
+                </div>
+                <div id="currentDeviceInfo"
+                    style="margin-top: 8px; padding: 8px; background: #f0f9ff; border-radius: 6px; display: none;">
+                    <small style="color: #0369a1; display: flex; align-items: center; gap: 6px;">
+                        <span>✅</span>
+                        <span id="currentDeviceName">-</span>
+                        <span style="color: #6b7280;">|</span>
+                        <span id="currentDeviceId" style="font-family: monospace;">-</span>
+                    </small>
+                </div>
+                <div id="credentialsStatus" style="margin-top: 8px; padding: 8px; border-radius: 6px; display: none;">
+                    <small id="credentialsStatusText" style="display: flex; align-items: center; gap: 6px;"></small>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                    <small style="color: #6b7280; font-size: 12px;">
+                        <span id="dataSourceInfo">Načítáno z API</span> |
+                        <span id="tokenStatus" style="color: #9ca3af;">Token: <span id="tokenStatusText">-</span></span>
+                    </small>
+                    <button type="button" id="logoutBtn" class="btn btn-secondary btn-small" onclick="handleLogout()"
+                        style="display: none; font-size: 11px;">
+                        👋 Odhlásit
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Device ID</span>
+                    <button type="button" class="btn btn-secondary btn-small" onclick="toggleCredentialsEdit()"
+                        style="font-size: 10px; padding: 2px 8px;" title="Odemknout pro manuální úpravu (testování)">
+                        🔓 Upravit
+                    </button>
+                </label>
+                <input type="text" id="deviceId" value="" readonly
+                    style="background-color: #f9fafb; cursor: not-allowed;">
+                <small style="color: #6b7280; font-size: 12px;">📌 Automaticky načteno z vybraného zařízení výše</small>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>MQTT Username</label>
+                    <input type="text" id="username" value="" readonly
+                        style="background-color: #f9fafb; cursor: not-allowed;">
+                    <small style="color: #6b7280; font-size: 11px;">🔐 Automaticky načteno po autentizaci</small>
+                </div>
+                <div class="form-group">
+                    <label>MQTT Password</label>
+                    <input type="text" id="password" value="" readonly
+                        style="background-color: #f9fafb; cursor: not-allowed;">
+                    <small style="color: #6b7280; font-size: 11px;">🔐 Automaticky načteno po autentizaci</small>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button id="authBtn" class="btn btn-secondary" onclick="handleDeviceAuth()" style="display: none;">
+                    🔐 Autentizovat zařízení
+                </button>
+                <button id="syncAclBtn" class="btn btn-secondary" onclick="syncAcl()"
+                    title="Synchronizovat ACL - přidá všechny existující zařízení a moduly do ACL souboru">
+                    🔄 Synchronizovat ACL
+                </button>
+                <button id="connectBtn" class="btn btn-primary" onclick="simulator.connect()">
+                    🔌 Připojit
+                </button>
+                <button id="disconnectBtn" class="btn btn-danger" onclick="simulator.disconnect()"
+                    style="display: none;">
+                    🔌 Odpojit
+                </button>
+            </div>
+
+            <div id="credentialsInfo"
+                style="margin-top: 15px; padding: 10px; background: #f0f9ff; border-radius: 8px; display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <small style="color: #0369a1;">
+                        💾 <strong>Credentials uloženy</strong> - Zařízení se automaticky připojí při dalším spuštění
+                    </small>
+                    <button type="button" class="btn btn-secondary btn-small" onclick="clearSavedCredentials()"
+                        title="Vymazat uložené credentials (pro testování)">
+                        🗑️ Vymazat
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Info Card -->
+        <div class="card" id="deviceInfoCard" style="display: none;">
+            <h2>ℹ️ Informace o zařízení</h2>
+
+            <div id="deviceOwnerInfo"
+                style="margin-bottom: 20px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: #374151;">👤 Vlastník:</span>
+                    <span id="deviceOwnerName" style="color: #1f2937;">-</span>
+                </div>
+                <div style="font-size: 12px; color: #6b7280;" id="deviceOwnerEmail">-</div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <h3 style="font-size: 16px; color: #1f2937; margin: 0;">📦 Moduly připojené k zařízení</h3>
+                    <button type="button" class="btn btn-primary btn-small" onclick="showLinkModuleModal()"
+                        id="linkModuleBtn">
+                        ➕ Připojit modul
+                    </button>
+                </div>
+                <div id="deviceModulesList" style="min-height: 50px;">
+                    <div style="text-align: center; padding: 20px; color: #9ca3af;">
+                        <div>⏳ Načítám moduly...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Link Module Modal -->
+        <div id="linkModuleModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>➕ Připojit modul k zařízení</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Vyberte modul</label>
+                        <select id="moduleSelect" class="form-control">
+                            <option value="">-- Vyberte modul --</option>
+                        </select>
+                        <small style="color: #6b7280; font-size: 12px;">Vyberte modul, který chcete připojit k tomuto
+                            zařízení</small>
+                    </div>
+                    <div id="linkModuleError" style="color: #ef4444; margin-top: 10px; display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="hideLinkModuleModal()">Zrušit</button>
+                    <button class="btn btn-primary" onclick="linkModuleToDevice()">✅ Připojit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Login Modal -->
+        <div id="loginModal" class="modal" data-login-required="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🔐 Přihlášení</h2>
+                </div>
+                <div class="modal-body">
+                    <p style="margin-bottom: 15px; color: #6b7280;">
+                        Pro načtení zařízení z Management Console je vyžadováno přihlášení.
+                    </p>
+
+                    <!-- Quick login buttons -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-size: 12px; color: #6b7280; margin-bottom: 8px; display: block;">⚡ Rychlé přihlášení:</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-secondary btn-small" onclick="fillTestUser('a@a.cz', 'test123')"
+                                style="font-size: 12px;">
+                                👤 a@a.cz
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-small" onclick="fillTestUser('admin@admin.cz', 'admin')"
+                                style="font-size: 12px;">
+                                👑 Admin
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="vas@email.cz" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Heslo</label>
+                        <input type="password" id="loginPassword" placeholder="heslo" required>
+                    </div>
+                    <div id="loginError" style="color: #ef4444; margin-top: 10px; display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="hideLoginModal()">Zrušit</button>
+                    <button class="btn btn-primary" onclick="handleLogin()">🔐 Přihlásit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Modal (první spuštění) -->
+        <div id="authModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🔐 Autentizace zařízení</h2>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 20px; color: #6b7280;">
+                        <p>
+                            Při prvním spuštění musíte ověřit, že simulátor patří ke správnému fyzickému kurníku.
+                            Použijte <strong>Device ID</strong> vybraného zařízení a jeho <strong>Factory
+                                Password</strong>.
+                        </p>
+                        <div
+                            style="background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 8px; padding: 10px; color: #0369a1; font-size: 12px;">
+                            <strong>Jak zjistit údaje?</strong>
+                            <ol style="margin: 8px 0 0 18px; padding: 0;">
+                                <li>Device ID = číslo zařízení z Management Console (např. <code>#4</code>).</li>
+                                <li>Factory Password = heslo v tabulce MqttDevice / detailu zařízení (viditelné pro
+                                    admina).</li>
+                            </ol>
+                            <p style="margin: 8px 0 0;">
+                                <strong>Důležité:</strong> Toto heslo zadávané na fyzickém kurníku (nebo v simulátoru)
+                                se použije při volání
+                                <code>/api/mqtt/devices/auth</code>. Zařízení odešle <em>Device ID + Factory
+                                    Password</em>, aby získalo
+                                aktuální MQTT credentials. Pokud není heslo vyplněné, backend dočasně použije stejnou
+                                hodnotu jako MQTT username,
+                                což ale nedoporučujeme pro produkci.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Device ID</label>
+                        <input type="text" id="authDeviceId" placeholder="123" required>
+                        <small style="color: #6b7280; font-size: 12px;">Číslo zařízení z Management Console (shodné s
+                            #ID ve výběru výše)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Factory Password</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="password" id="authPassword" placeholder="factory_password" required
+                                style="flex: 1;">
+                            <button type="button" class="btn btn-secondary btn-small"
+                                onclick="fillDefaultFactoryPassword()"
+                                title="Vyplnit defaultní heslo pro testování (123)"
+                                style="font-size: 12px; white-space: nowrap;">
+                                ⚡ Default
+                            </button>
+                        </div>
+                        <small style="color: #6b7280; font-size: 12px;">Najdete v detailu zařízení / MqttDevice (admin)
+                            – je unikátní pro každý kurník</small>
+                    </div>
+
+                    <div id="authError" style="color: #ef4444; margin-top: 10px; display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="DeviceAuth.hideAuthModal()">Zrušit</button>
+                    <button class="btn btn-primary" onclick="performDeviceAuth()">🔐 Autentizovat</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid">
+            <!-- Device Info Card -->
+            <div class="card" id="deviceInfoCard" style="display: none; grid-column: 1 / -1;">
+                <h2>🏠 Informace o zařízení</h2>
+                <div style="display: grid; gap: 20px; margin-top: 15px;">
+                    <!-- Device Details -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div style="padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Zařízení</div>
+                            <div style="font-weight: 600; color: #111827;" id="deviceInfoName">-</div>
+                        </div>
+                        <div style="padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Device ID</div>
+                            <div style="font-weight: 600; color: #111827; font-family: monospace;" id="deviceInfoId">-
+                            </div>
+                        </div>
+                        <div style="padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Vlastník</div>
+                            <div style="font-weight: 600; color: #111827;" id="deviceInfoOwner">-</div>
+                        </div>
+                        <div style="padding: 12px; background: #f3f4f6; border-radius: 8px;">
+                            <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Status</div>
+                            <div style="font-weight: 600;" id="deviceInfoStatus">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Modules List -->
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 10px;">📦
+                            Připojené moduly (<span id="deviceModulesCount">0</span>)</div>
+                        <div id="deviceModulesList"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 15px;">
+                            <!-- Detailní ovládací karty modulů se naplní dynamicky -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensors Card -->
+            <div class="card" id="sensorsCard">
+                <h2>🌡️ Senzory</h2>
+
+                <div id="sensorModuleStatus"
+                    style="padding: 10px; background: #fef3c7; border-radius: 6px; margin-bottom: 15px; display: none;">
+                    <div style="font-size: 12px; color: #92400e; text-align: center;">
+                        ⚠️ Modul senzorů není připojen k tomuto zařízení
+                    </div>
+                </div>
+
+                <div id="sensorsContent">
+                    <div class="sensor-item">
+                        <div class="sensor-label">Teplota</div>
+                        <div class="sensor-value" id="temperature">--°C</div>
+                        <div class="sensor-range">
+                            <input type="range" id="tempRange" min="15" max="35" value="22"
+                                onchange="sensors.setTemperature(this.value)">
+                            <span class="range-label">15°C - 35°C</span>
+                        </div>
+                    </div>
+
+                    <div class="sensor-item">
+                        <div class="sensor-label">Vlhkost</div>
+                        <div class="sensor-value" id="humidity">--%</div>
+                        <div class="sensor-range">
+                            <input type="range" id="humidityRange" min="30" max="90" value="65"
+                                onchange="sensors.setHumidity(this.value)">
+                            <span class="range-label">30% - 90%</span>
+                        </div>
+                    </div>
+
+                    <div class="sensor-item">
+                        <div class="sensor-label">Světlo</div>
+                        <div class="sensor-value" id="light">--</div>
+                        <div class="sensor-range">
+                            <input type="range" id="lightRange" min="0" max="1000" value="450"
+                                onchange="sensors.setLight(this.value)">
+                            <span class="range-label">0 - 1000 lux</span>
+                        </div>
+                    </div>
+
+                    <div class="switch-item">
+                        <span>Auto-generování náhodných hodnot</span>
+                        <label class="switch">
+                            <input type="checkbox" id="autoSensors" onchange="sensors.toggleAuto(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Door Control Card -->
+            <div class="card" id="doorCard">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">🚪 Smart Door</h2>
+                    <div id="doorModuleBadge"
+                        style="font-size: 11px; padding: 4px 10px; background: #10b981; color: white; border-radius: 12px; font-weight: 600;">
+                        🟢 Online
+                    </div>
+                </div>
+
+                <div id="doorModuleStatus"
+                    style="padding: 10px; background: #fef3c7; border-radius: 6px; margin-bottom: 15px; display: none;">
+                    <div style="font-size: 12px; color: #92400e; text-align: center;">
+                        ⚠️ Modul Smart Door není připojen k tomuto zařízení
+                    </div>
+                </div>
+
+                <div id="doorContent">
+                    <!-- Vizualizace dveří -->
+                    <div class="door-visual" style="margin-bottom: 20px;">
+                        <div id="doorVisual" class="door closed">
+                            <div class="door-label">ZAVŘENO</div>
+                        </div>
+                    </div>
+
+                    <!-- Status info -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                        <div style="padding: 10px; background: #f0f9ff; border-radius: 6px; border: 1px solid #bfdbfe;">
+                            <div
+                                style="font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">
+                                Stav</div>
+                            <div id="doorState" class="badge badge-secondary" style="font-size: 13px;">closed</div>
+                        </div>
+                        <div style="padding: 10px; background: #f0fdf4; border-radius: 6px; border: 1px solid #bbf7d0;">
+                            <div
+                                style="font-size: 10px; color: #6b7280; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">
+                                Pozice</div>
+                            <div id="doorPosition" style="font-size: 13px; color: #1f2937; font-weight: 600;">0%</div>
+                        </div>
+                    </div>
+
+                    <!-- Manuální ovládání -->
+                    <div
+                        style="background: #f9fafb; padding: 15px; border-radius: 10px; border: 1px solid #e5e7eb; margin-bottom: 15px;">
+                        <div
+                            style="font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            🎮 Manuální ovládání</div>
+                        <div class="button-group" id="doorButtons">
+                            <button class="btn btn-success" onclick="door.open()" id="doorOpenBtn">⬆️ Otevřít</button>
+                            <button class="btn btn-danger" onclick="door.close()" id="doorCloseBtn">⬇️ Zavřít</button>
+                            <button class="btn btn-warning" onclick="door.stop()" id="doorStopBtn">⏸️ Stop</button>
+                        </div>
+                    </div>
+
+                    <!-- Automatické nastavení -->
+                    <div
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 10px; margin-bottom: 15px; color: white;">
+                        <div style="font-size: 13px; font-weight: 600; margin-bottom: 12px;">⚙️ Automatické ovládání
+                        </div>
+
+                        <!-- Zapnuto/Vypnuto -->
+                        <div class="switch-item"
+                            style="background: rgba(255,255,255,0.15); padding: 10px; border-radius: 6px; margin-bottom: 12px;">
+                            <span style="font-size: 12px; font-weight: 500; color: white;">Automatika zapnuta</span>
+                            <label class="switch">
+                                <input type="checkbox" id="doorEnabled" checked
+                                    onchange="door.enabled = this.checked; door.saveSettings(); door.calculateNextAction();">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <!-- Režim -->
+                        <div style="margin-bottom: 12px;">
+                            <label
+                                style="display: block; font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 6px; font-weight: 600; text-transform: uppercase;">Režim</label>
+                            <select id="doorMode"
+                                onchange="door.mode = this.value; door.saveSettings(); door.calculateNextAction();"
+                                style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.15); color: white; font-size: 13px;">
+                                <option value="sun" style="background: #667eea; color: white;">☀️ Podle slunce</option>
+                                <option value="timer" style="background: #667eea; color: white;">⏰ Pevný čas</option>
+                            </select>
+                        </div>
+
+                        <!-- Časy (timer režim) -->
+                        <div id="doorTimerSettings" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                                <div>
+                                    <label
+                                        style="display: block; font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 6px;">Čas
+                                        otevření</label>
+                                    <input type="time" id="doorOpenTime" value="06:00"
+                                        onchange="door.openTime = this.value; door.saveSettings(); door.calculateNextAction();"
+                                        style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 13px;">
+                                </div>
+                                <div>
+                                    <label
+                                        style="display: block; font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 6px;">Čas
+                                        zavření</label>
+                                    <input type="time" id="doorCloseTime" value="21:00"
+                                        onchange="door.closeTime = this.value; door.saveSettings(); door.calculateNextAction();"
+                                        style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 13px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Offset (sun režim) -->
+                        <div id="doorSunSettings">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                                <div>
+                                    <label
+                                        style="display: block; font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 6px;">Offset
+                                        otevření (min)</label>
+                                    <input type="number" id="doorOpenOffset" value="0" min="-120" max="120"
+                                        onchange="door.openOffset = parseInt(this.value); door.saveSettings(); door.calculateNextAction();"
+                                        style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 13px;">
+                                </div>
+                                <div>
+                                    <label
+                                        style="display: block; font-size: 11px; color: rgba(255,255,255,0.9); margin-bottom: 6px;">Offset
+                                        zavření (min)</label>
+                                    <input type="number" id="doorCloseOffset" value="0" min="-120" max="120"
+                                        onchange="door.closeOffset = parseInt(this.value); door.saveSettings(); door.calculateNextAction();"
+                                        style="width: 100%; padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: white; font-size: 13px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tlačítko načíst časy -->
+                        <button class="btn btn-primary" onclick="door.loadSunTimesFromApi(chickens.currentCoopId)"
+                            id="doorLoadSunTimesBtn"
+                            style="width: 100%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; font-weight: 600; padding: 10px;">
+                            🌅 Načíst časy slunce z API
+                        </button>
+                    </div>
+
+                    <!-- Plán -->
+                    <div style="background: #f0f9ff; padding: 15px; border-radius: 10px; border: 1px solid #bfdbfe;">
+                        <div
+                            style="font-size: 12px; color: #0369a1; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            📅 Plán</div>
+
+                        <div style="margin-bottom: 8px;">
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">Režim:</div>
+                            <div id="doorScheduleDisplay" style="font-size: 13px; color: #1f2937; font-weight: 600;">☀️
+                                Režim podle slunce</div>
+                        </div>
+
+                        <div>
+                            <div style="font-size: 11px; color: #6b7280; margin-bottom: 4px;">Další akce:</div>
+                            <div id="doorNextAction" style="font-size: 13px; color: #0369a1; font-weight: 600;">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Legacy auto mode switch -->
+                    <div class="switch-item" style="margin-top: 15px; display: none;">
+                        <span>Auto režim (Legacy)</span>
+                        <label class="switch">
+                            <input type="checkbox" id="doorAutoMode" onchange="door.setAutoMode(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Feeder Card -->
+            <div class="card" id="feederCard">
+                <div class="feeder-card-header">
+                    <div>
+                        <h2 style="margin: 0;">🍽️ Feeder</h2>
+                        <div class="feeder-module-meta">
+                            <span id="feederModuleName">Simulované krmítko</span>
+                            <span id="feederModuleId">ID: -</span>
+                        </div>
+                    </div>
+                    <div id="feederStatusBadge" class="feeder-status-badge offline">⚫ Odpojeno</div>
+                </div>
+
+                <div id="feederModuleStatus"
+                    style="padding: 12px; background: #fef3c7; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 15px; display: none;">
+                    <div style="font-size: 13px; color: #92400e; font-weight: 600; margin-bottom: 4px;">⚠️ Modul krmítka
+                        není připojen</div>
+                    <div style="font-size: 12px; color: #78350f;">Připojte modul typu <strong>feeder</strong> v
+                        Management Console, aby bylo možné simulovat krmítko přes toto zařízení.</div>
+                </div>
+
+                <div id="feederContent">
+                    <div class="feeder-tabs" id="feederTabButtons">
+                        <button type="button" class="active" data-tab="overview">📊 Přehled</button>
+                        <button type="button" data-tab="schedule">⏰ Rozvrh</button>
+                        <button type="button" data-tab="manual">🎮 Manuální</button>
+                    </div>
+
+                    <!-- Overview -->
+                    <div class="feeder-tab-panel" data-tab="overview">
+                        <div class="feeder-stats-grid">
+                            <div class="feeder-stat-card">
+                                <div class="label">Úroveň krmiva</div>
+                                <div class="value" id="feederFoodLevelValue">75%</div>
+                                <div class="sub">zbývá</div>
+                            </div>
+                            <div class="feeder-stat-card">
+                                <div class="label">Poslední krmení</div>
+                                <div class="value" id="feederLastFeedValue">–</div>
+                                <div class="sub">čas</div>
+                            </div>
+                            <div class="feeder-stat-card">
+                                <div class="label">Dnes vydáno</div>
+                                <div class="value" id="feederDailyTotalValue">0 g</div>
+                                <div class="sub">součet</div>
+                            </div>
+                            <div class="feeder-stat-card">
+                                <div class="label">Aktivní rozvrhy</div>
+                                <div class="value" id="feederActiveSchedulesValue">3</div>
+                                <div class="sub">naplánováno</div>
+                            </div>
+                        </div>
+
+                        <div class="feeder-progress-card">
+                            <div class="progress-header">
+                                <span>Zásobník</span>
+                                <span id="feederFoodLevelPercent">75%</span>
+                            </div>
+                            <div class="feeder-progress-bar">
+                                <div id="feederProgressFill" style="width: 75%;"></div>
+                            </div>
+                            <div class="feeder-adjust">
+                                <label for="feederLevelRange">Simulovaná hladina</label>
+                                <input type="range" id="feederLevelRange" min="0" max="100" value="75">
+                                <small>Táhnutím nastavíte vlastní hodnotu zásobníku.</small>
+                            </div>
+                            <button class="btn btn-secondary btn-small" id="feederRefillBtn"
+                                style="margin-top: 10px; width: 100%;">🔄 Doplnit na 100%</button>
+                        </div>
+
+                        <div class="feeder-quick-actions" id="feederActions">
+                            <button class="btn btn-primary" id="feederQuickFeedBtn">
+                                ▶️ Nakrmit 25 g
+                            </button>
+                            <button class="btn btn-secondary" id="feederScheduleShortcut">
+                                🗓️ Upravit rozvrh
+                            </button>
+                        </div>
+
+                        <div class="feeder-communication">
+                            <div>
+                                <div class="label">Poslední synchronizace</div>
+                                <div id="feederLastSync">–</div>
+                            </div>
+                            <div>
+                                <div class="label">Poslední aktualizace zařízení</div>
+                                <div id="feederLastUpdate">–</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Schedule -->
+                    <div class="feeder-tab-panel" data-tab="schedule" style="display: none;">
+                        <div class="feeder-schedule-header">
+                            <div>
+                                <h3>⏰ Rozvrh krmení</h3>
+                                <p>Spravujte jednotlivé dávky během dne.</p>
+                            </div>
+                            <button class="btn btn-secondary btn-small" id="feederAddScheduleBtn">➕ Přidat</button>
+                        </div>
+
+                        <div id="feederScheduleList" class="feeder-schedule-list">
+                            <!-- Items generated dynamicky -->
+                        </div>
+                        <div id="feederScheduleEmpty" class="feeder-schedule-empty" style="display: none;">
+                            <p>Žádné naplánované dávky.</p>
+                            <small>Přidejte první čas pomocí tlačítka „➕ Přidat“.</small>
+                        </div>
+
+                        <div class="feeder-save-row">
+                            <button class="btn btn-primary" id="feederSaveScheduleBtn">💾 Uložit rozvrh</button>
+                        </div>
+                    </div>
+
+                    <!-- Manual -->
+                    <div class="feeder-tab-panel" data-tab="manual" style="display: none;">
+                        <div class="feeder-manual-card">
+                            <h3>🎮 Manuální krmení</h3>
+                            <label for="feederManualInput">Množství krmiva (g)</label>
+                            <div class="feeder-manual-input">
+                                <input type="number" id="feederManualInput" value="25" min="1" max="120">
+                                <span>gramů</span>
+                            </div>
+
+                            <div class="feeder-preset-buttons" id="feederPresetButtons">
+                                <button type="button" data-amount="10">10 g</button>
+                                <button type="button" data-amount="25" class="active">25 g</button>
+                                <button type="button" data-amount="50">50 g</button>
+                                <button type="button" data-amount="75">75 g</button>
+                            </div>
+
+                            <div class="button-group" id="feederManualButtons">
+                                <button class="btn btn-primary" id="feederManualFeedBtn" style="flex: 1;">▶️ Vydat
+                                    krmivo</button>
+                                <button class="btn btn-warning" id="feederSimulateJamBtn" style="flex: 1;">⚠️ Simulovat
+                                    zásek</button>
+                            </div>
+
+                            <div class="feeder-manual-info">
+                                <div>Poslední akce:</div>
+                                <div id="feederManualInfo">Žádná</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Card -->
+            <div class="card camera-card" id="cameraCard">
+                <div class="camera-card-header">
+                    <div>
+                        <h2 style="margin: 0;">📹 Kamera</h2>
+                        <div class="camera-meta">
+                            <span id="cameraModuleName">Simulovaná kamera</span>
+                            <span id="cameraModuleId">ID: -</span>
+                        </div>
+                    </div>
+                    <div id="cameraStatusBadge" class="camera-status-badge offline">🔴 Offline</div>
+                </div>
+
+                <div id="cameraModuleStatus" class="camera-warning" style="display: none;">
+                    <div class="camera-warning-title">⚠️ Modul kamery není připojen</div>
+                    <div class="camera-warning-text">
+                        Pro přístup ke kameře přidejte modul typu <strong>camera</strong> v Management Console a
+                        připojte jej k tomuto zařízení.
+                    </div>
+                </div>
+
+                <div id="cameraContent">
+                    <div class="camera-panels">
+                        <div class="camera-panel" id="cameraStatusPanel">
+                            <div class="camera-panel-header">
+                                <span>Stav kamery</span>
+                                <div class="camera-dot" id="cameraStatusDot"></div>
+                            </div>
+                            <div class="camera-status-info">
+                                <div class="camera-status-title" id="cameraStatusText">Offline</div>
+                                <div class="camera-status-subtext" id="cameraStatusSubtext">Čekám na připojení...</div>
+                            </div>
+                        </div>
+
+                        <div class="camera-panel stream-panel">
+                            <div class="camera-panel-header">
+                                <span>Živý přenos</span>
+                            </div>
+                            <div class="camera-stream" id="cameraStream">
+                                <div class="camera-stream-placeholder" id="cameraStreamPlaceholder">
+                                    <div class="camera-stream-icon" id="cameraStreamIcon">📡</div>
+                                    <div class="camera-stream-text" id="cameraStreamText">Stream bude zobrazen zde</div>
+                                    <div class="camera-stream-subtext" id="cameraStreamSubtext">Kamera není připojena
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="camera-panel controls-panel">
+                        <div class="camera-panel-header">
+                            <span>Ovládání</span>
+                        </div>
+                        <div class="camera-controls" id="cameraControls">
+                            <button class="btn btn-primary" id="cameraTakePhotoBtn">📸 Vyfotit</button>
+                            <button class="btn btn-secondary" id="cameraFetchLatestBtn">⬇️ Stáhnout poslední
+                                fotku</button>
+                            <button class="btn btn-success" id="cameraRecordBtn">⏺️ Nahrát</button>
+                            <button class="btn btn-danger" id="cameraStopBtn" style="display: none;">⏹️
+                                Zastavit</button>
+                        </div>
+                        <div class="camera-recording-indicator" id="cameraRecordingIndicator" style="display: none;">
+                            <div class="camera-recording-dot"></div>
+                            <div class="camera-recording-text">Nahrávání probíhá...</div>
+                        </div>
+                    </div>
+
+                    <div class="camera-panel snapshots-panel">
+                        <div class="camera-panel-header">
+                            <span>Poslední snímky</span>
+                            <span id="cameraSnapshotCount">0 snímků</span>
+                        </div>
+                        <div class="camera-filter-buttons" id="cameraFilterButtons">
+                            <button data-filter="all" class="active">Vše</button>
+                            <button data-filter="today">Dnes</button>
+                            <button data-filter="yesterday">Včera</button>
+                            <button data-filter="week">Týden</button>
+                        </div>
+                        <div class="camera-snapshots" id="cameraSnapshotsContainer"></div>
+                        <div class="camera-snapshots-empty" id="cameraSnapshotsEmpty" style="display: none;">
+                            <div>📷</div>
+                            <p>Zatím žádné snímky</p>
+                        </div>
+                    </div>
+
+                    <div class="camera-panel diagnostics-panel">
+                        <div class="camera-panel-header">
+                            <span>Diagnostika</span>
+                        </div>
+                        <div class="camera-diagnostics">
+                            <div class="camera-diagnostic-row">
+                                <div class="camera-diagnostic-icon">📡</div>
+                                <div>
+                                    <div class="camera-diagnostic-label">Připojení</div>
+                                    <div class="camera-diagnostic-value" id="cameraDiagConnection">Neaktivní</div>
+                                </div>
+                            </div>
+                            <div class="camera-diagnostic-row">
+                                <div class="camera-diagnostic-icon">🔗</div>
+                                <div>
+                                    <div class="camera-diagnostic-label">Stream URL</div>
+                                    <div class="camera-diagnostic-value" id="cameraDiagStream">Nezadáno</div>
+                                </div>
+                            </div>
+                            <div class="camera-diagnostic-row">
+                                <div class="camera-diagnostic-icon">⏺️</div>
+                                <div>
+                                    <div class="camera-diagnostic-label">Nahrávání</div>
+                                    <div class="camera-diagnostic-value" id="cameraDiagRecording">Neaktivní</div>
+                                </div>
+                            </div>
+                            <div class="camera-diagnostic-row">
+                                <div class="camera-diagnostic-icon">🖼️</div>
+                                <div>
+                                    <div class="camera-diagnostic-label">Snímky</div>
+                                    <div class="camera-diagnostic-value" id="cameraDiagSnapshots">0 snímků</div>
+                                </div>
+                            </div>
+                        </div>
+                        style="text-align: center; border-left: 1px solid rgba(255,255,255,0.2); border-right: 1px solid
+                        rgba(255,255,255,0.2);">
+                        <div style="font-size: 36px; font-weight: bold; color: white; line-height: 1; margin-bottom: 6px;"
+                            id="chickensOutside">0</div>
+                        <div
+                            style="font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                            🌳 Venku</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 36px; font-weight: bold; color: white; line-height: 1; margin-bottom: 6px;"
+                            id="chickensTotal">0</div>
+                        <div
+                            style="font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                            🐔 Celkem</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seznam slepic -->
+            <div id="chickensListContainer" style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="font-size: 14px; margin: 0; color: #1f2937; font-weight: 600;">📋 Seznam slepic
+                    </h3>
+                </div>
+                <div id="chickensList"
+                    style="display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+                    <!-- Seznam slepic se naplní dynamicky -->
+                </div>
+            </div>
+
+            <!-- Přidání nové slepice -->
+            <div id="addChickenContainer"
+                style="display: none; margin-bottom: 15px; padding: 16px; background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%); border-radius: 10px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="font-size: 15px; margin: 0; color: #065f46; font-weight: 700;">✨ Přidat novou
+                        slepici
+                    </h3>
+                    <button class="btn btn-danger btn-small" onclick="chickens.cancelAddChicken()"
+                        style="padding: 6px 12px;">❌</button>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
+                    <label
+                        style="display: block; font-size: 12px; color: #374151; margin-bottom: 6px; font-weight: 600;">Jméno
+                        slepice:</label>
+                    <input type="text" id="newChickenName" placeholder="Např. Bětuška"
+                        style="width: 100%; padding: 10px; border: 2px solid #10b981; border-radius: 6px; margin-bottom: 12px; font-size: 14px;">
+
+                    <label
+                        style="display: block; font-size: 12px; color: #374151; margin-bottom: 6px; font-weight: 600;">RFID
+                        Tag:</label>
+                    <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 8px;">
+                        <input type="text" id="newChickenTag" placeholder="RFID tag"
+                            style="padding: 10px; border: 2px solid #10b981; border-radius: 6px; font-size: 13px; font-family: monospace;">
+                        <button class="btn btn-primary btn-small" onclick="chickens.generateRandomTagForNewChicken()"
+                            title="Vygenerovat náhodný tag">🎲</button>
+                        <button class="btn btn-warning btn-small" onclick="chickens.scanRfidForNewChicken()"
+                            title="Simulovat sken">📡</button>
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="chickens.confirmAddChicken()"
+                    style="width: 100%; padding: 12px; font-weight: 600; font-size: 14px;">
+                    ✅ Přidat slepici
+                </button>
+            </div>
+
+            <!-- Akce a správa -->
+            <div style="background: #f9fafb; padding: 15px; border-radius: 10px; border: 1px solid #e5e7eb;">
+                <!-- Tlačítka pro správu slepic -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <button class="btn btn-success" onclick="chickens.showAddChickenForm()" id="addChickenBtn"
+                        style="font-weight: 600; padding: 10px;">
+                        ➕ Přidat slepici
+                    </button>
+                    <button class="btn btn-primary" onclick="chickens.syncWithServer()" id="syncChickensBtn"
+                        style="font-weight: 600; padding: 10px;">
+                        🔄 Synchronizovat
+                    </button>
+                </div>
+
+                <!-- RFID simulace -->
+                <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                    <div
+                        style="font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        ⚡ RFID Simulace</div>
+                    <div class="button-group" style="margin-bottom: 10px;">
+                        <button class="btn btn-primary" onclick="chickens.enter()" style="flex: 1;">➡️
+                            Vstup</button>
+                        <button class="btn btn-secondary" onclick="chickens.exit()" style="flex: 1;">⬅️
+                            Výstup</button>
+                    </div>
+
+                    <div class="switch-item"
+                        style="background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">
+                        <span style="font-size: 12px; font-weight: 500;">Auto režim (náhodné události)</span>
+                        <label class="switch">
+                            <input type="checkbox" id="autoRfid" onchange="chickens.toggleAuto(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Smart Counter Card -->
+        <div class="card" id="smartCounterCard">
+            <h2>🥚 Smart Counter</h2>
+
+            <div
+                style="padding: 12px; background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 6px; margin-bottom: 15px;">
+                <div style="font-size: 13px; color: #991b1b; margin-bottom: 6px;">
+                    <strong>ℹ️ Počítání vajec:</strong>
+                </div>
+                <div style="font-size: 12px; color: #991b1b; line-height: 1.6;">
+                    Klikněte na kartu slepice pro zaznamenání snášky vejce. Každá slepice má vlastní denní
+                    počítadlo.
+                </div>
+            </div>
+
+            <div id="smartCounterNoChickens"
+                style="padding: 20px; background: #fef3c7; border-radius: 8px; text-align: center; color: #92400e; font-size: 13px;">
+                ⚠️ Žádné slepice v zařízení<br>
+                <small style="font-size: 11px;">Přidejte slepici v sekci "📡 RFID brána"</small>
+            </div>
+
+            <!-- Grid karet slepic -->
+            <div id="smartCounterChickensGrid"
+                style="display: none; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+                <!-- Karty slepic se naplní dynamicky -->
+            </div>
+        </div>
+
+        <!-- Network Card - Enhanced with AP Mode, WiFi Client, GSM -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">📡 Síť</h2>
+                <div id="networkMode" class="badge badge-info">🔓 AP Mode</div>
+            </div>
+
+            <!-- Network Mode Selector -->
+            <div
+                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 10px; margin-bottom: 15px; color: white;">
+                <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px;">⚙️ Síťový režim</div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                    <button class="btn btn-secondary btn-small" onclick="network.switchToApMode()"
+                        style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        🔓 AP Mode
+                    </button>
+                    <button class="btn btn-secondary btn-small" onclick="network.switchToWifiClient()"
+                        style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        📶 WiFi Client
+                    </button>
+                    <button class="btn btn-secondary btn-small" onclick="network.switchToGsm()"
+                        style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        📡 GSM
+                    </button>
+                    <button class="btn btn-secondary btn-small" onclick="network.goOffline()"
+                        style="background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white;">
+                        📴 Offline
+                    </button>
+                </div>
+            </div>
+
+            <!-- WiFi Section -->
+            <div
+                style="background: #f0f9ff; padding: 15px; border-radius: 10px; border: 1px solid #bfdbfe; margin-bottom: 15px;">
+                <div
+                    style="font-size: 12px; color: #0369a1; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    📶 WiFi</div>
+
+                <div class="status-item">
+                    <span>Status:</span>
+                    <span id="wifiStatus" class="badge badge-success">Connected</span>
+                </div>
+                <div class="status-item">
+                    <span>SSID:</span>
+                    <span id="wifiSsid" style="font-family: monospace; font-size: 12px;">Not configured</span>
+                </div>
+                <div class="status-item">
+                    <span>Signal:</span>
+                    <span id="wifiSignal">-45 dBm</span>
+                </div>
+
+                <!-- WiFi Configuration (shown when configuring) -->
+                <div id="wifiConfigSection"
+                    style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #bfdbfe; display: none;">
+                    <label
+                        style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">WiFi
+                        SSID:</label>
+                    <input type="text" id="wifiConfigSsid" placeholder="MyNetwork"
+                        style="width: 100%; padding: 8px; border: 1px solid #bfdbfe; border-radius: 6px; margin-bottom: 8px; font-size: 13px;">
+
+                    <label
+                        style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; font-weight: 600;">Password:</label>
+                    <input type="password" id="wifiConfigPassword" placeholder="********"
+                        style="width: 100%; padding: 8px; border: 1px solid #bfdbfe; border-radius: 6px; margin-bottom: 8px; font-size: 13px;">
+
+                    <button class="btn btn-primary btn-small" onclick="configureWifiFromUI()"
+                        style="width: 100%; padding: 8px; font-size: 12px;">
+                        ✅ Uložit a připojit
+                    </button>
+                </div>
+
+                <button class="btn btn-secondary btn-small" onclick="toggleWifiConfig()" id="wifiConfigBtn"
+                    style="width: 100%; margin-top: 10px; font-size: 12px;">
+                    ⚙️ Konfigurovat WiFi
+                </button>
+
+                <!-- WiFi Scanner -->
+                <button class="btn btn-primary btn-small" onclick="network.scanWifiNetworks()" id="wifiScanBtn"
+                    style="width: 100%; margin-top: 8px; font-size: 12px;">
+                    🔍 Hledat sítě
+                </button>
+
+                <!-- WiFi Scan Results (hidden by default) -->
+                <div id="wifiScanResults"
+                    style="margin-top: 10px; background: white; border: 1px solid #bfdbfe; border-radius: 6px; display: none;">
+                </div>
+            </div>
+
+            <!-- GSM Section -->
+            <div
+                style="background: #fef3c7; padding: 15px; border-radius: 10px; border: 1px solid #fde68a; margin-bottom: 15px;">
+                <div
+                    style="font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    📡 GSM Module</div>
+
+                <div class="status-item">
+                    <span>Status:</span>
+                    <span id="gsmStatus" class="badge badge-warning">Disabled</span>
+                </div>
+                <div class="status-item">
+                    <span>Operátor:</span>
+                    <span id="gsmOperator" style="font-size: 12px;">N/A</span>
+                </div>
+                <div class="status-item">
+                    <span>Signal:</span>
+                    <span id="gsmSignal">--</span>
+                </div>
+                <div class="status-item">
+                    <span>Data:</span>
+                    <span id="gsmDataUsage" style="font-size: 11px; font-family: monospace;">0.0 / 1000
+                        MB</span>
+                </div>
+
+                <div
+                    style="margin-top: 10px; padding: 8px; background: rgba(146, 64, 14, 0.1); border-radius: 6px; font-size: 11px; color: #92400e;">
+                    ℹ️ <strong>Periodic Mode:</strong> GSM odesílá heartbeat každých 5 minut (ne continuous)
+                </div>
+
+                <!-- GSM Configuration Section -->
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a;">
+                    <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">⚙️ GSM
+                        Konfigurace:</div>
+
+                    <div style="margin-bottom: 8px;">
+                        <label
+                            style="display: block; font-size: 10px; color: #78350f; margin-bottom: 4px; font-weight: 600;">APN:</label>
+                        <input type="text" id="gsmConfigApn" placeholder="internet" value="internet"
+                            style="width: 100%; padding: 6px; border: 1px solid #fde68a; border-radius: 4px; font-size: 12px;">
+                    </div>
+
+                    <div style="margin-bottom: 8px;">
+                        <label
+                            style="display: block; font-size: 10px; color: #78350f; margin-bottom: 4px; font-weight: 600;">Telefonní
+                            číslo:</label>
+                        <input type="text" id="gsmConfigPhone" placeholder="+420123456789" value="+420123456789"
+                            style="width: 100%; padding: 6px; border: 1px solid #fde68a; border-radius: 4px; font-size: 12px;">
+                    </div>
+
+                    <button class="btn btn-secondary btn-small" onclick="configureGsmFromUI()"
+                        style="width: 100%; font-size: 11px; padding: 6px;">
+                        ✅ Uložit GSM config
+                    </button>
+                </div>
+
+                <!-- GSM Functions -->
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a;">
+                    <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">🛠️ GSM
+                        Funkce:</div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                        <button class="btn btn-secondary btn-small" onclick="network.testGsmSignal()"
+                            id="gsmSignalTestBtn" style="font-size: 11px; padding: 6px;">
+                            📊 Test signálu
+                        </button>
+                        <button class="btn btn-secondary btn-small" onclick="network.checkGsmCredit()"
+                            id="gsmCreditCheckBtn" style="font-size: 11px; padding: 6px;">
+                            💳 Kontrola kreditu
+                        </button>
+                    </div>
+
+                    <!-- Signal Test Results -->
+                    <div id="gsmSignalTestResults" style="display: none;"></div>
+
+                    <!-- Credit Check Results -->
+                    <div id="gsmCreditDetails" style="display: none;"></div>
+                </div>
+
+                <!-- SMS Section -->
+                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #fde68a;">
+                    <div style="font-size: 11px; color: #92400e; font-weight: 600; margin-bottom: 8px;">📱 SMS:
+                    </div>
+
+                    <div style="margin-bottom: 6px;">
+                        <label
+                            style="display: block; font-size: 10px; color: #78350f; margin-bottom: 4px; font-weight: 600;">Příjemce:</label>
+                        <input type="text" id="gsmSmsRecipient" placeholder="+420777888999"
+                            style="width: 100%; padding: 6px; border: 1px solid #fde68a; border-radius: 4px; font-size: 12px;">
+                    </div>
+
+                    <div style="margin-bottom: 8px;">
+                        <label
+                            style="display: block; font-size: 10px; color: #78350f; margin-bottom: 4px; font-weight: 600;">Zpráva:</label>
+                        <textarea id="gsmSmsMessage" placeholder="Test SMS ze SmartCoop..."
+                            style="width: 100%; padding: 6px; border: 1px solid #fde68a; border-radius: 4px; font-size: 12px; resize: vertical; min-height: 50px;"></textarea>
+                    </div>
+
+                    <button class="btn btn-primary btn-small" onclick="sendSmsFromUI()" id="gsmSendSmsBtn"
+                        style="width: 100%; font-size: 11px; padding: 6px;">
+                        📤 Odeslat SMS
+                    </button>
+
+                    <!-- SMS History -->
+                    <div id="gsmSmsHistory"
+                        style="margin-top: 10px; background: white; border: 1px solid #fde68a; border-radius: 6px; padding: 8px;">
+                        <div style="text-align: center; padding: 10px; color: #9ca3af; font-size: 12px;">Žádné
+                            odeslané SMS</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Hash (WiFi Direct Sync Detection) -->
+            <div style="background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                <div style="font-size: 11px; color: #6b7280; font-weight: 600; margin-bottom: 6px;">🔐 Config
+                    Hash:
+                </div>
+                <div id="networkConfigHash"
+                    style="font-family: monospace; font-size: 11px; color: #1f2937; word-break: break-all;">
+                    Calculating...</div>
+                <small style="font-size: 10px; color: #9ca3af; display: block; margin-top: 4px;">
+                    Pro detekci změn přes WiFi Direct / AP Mode
+                </small>
+            </div>
+        </div>
+
+        <!-- System Card -->
+        <div class="card">
+            <h2>⚙️ Systém</h2>
+
+            <div class="status-item">
+                <span>Uptime:</span>
+                <span id="uptime">0s</span>
+            </div>
+            <div class="status-item">
+                <span>Free RAM:</span>
+                <span id="freeRam">234KB</span>
+            </div>
+            <div class="status-item">
+                <span>Firmware:</span>
+                <span>v1.2.5</span>
+            </div>
+            <div class="status-item">
+                <span>Napájení:</span>
+                <span id="powerSource" class="badge badge-success">AC Power</span>
+            </div>
+
+            <div class="button-group" style="margin-top: 15px;">
+                <button class="btn btn-primary" onclick="system.sendHeartbeat()">💓 Heartbeat</button>
+                <button class="btn btn-warning" onclick="system.restart()">🔄 Restart</button>
+            </div>
+
+            <div class="switch-item">
+                <span>Auto Heartbeat (10s)</span>
+                <label class="switch">
+                    <input type="checkbox" id="autoHeartbeat" onchange="system.toggleHeartbeat(this.checked)">
+                    <span class="slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Hardware Status Card -->
+        <div class="card" id="hardwareStatusCard">
+            <h2>🔧 Hardware Status</h2>
+            <p style="font-size: 12px; color: #6b7280; margin-bottom: 15px;">
+                Stav fyzických komponent připojených kabelem k ESP32
+            </p>
+
+            <!-- RTC DS3231 -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #065f46; display: flex; align-items: center; gap: 6px;">
+                        <span>🕐</span> RTC DS3231
+                    </div>
+                    <div id="rtcStatusBadge" class="badge badge-success">OK</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                    <div>
+                        <span style="color: #6b7280;">Čas:</span>
+                        <span id="rtcTime" style="font-family: monospace; color: #1f2937;">--:--:--</span>
+                    </div>
+                    <div>
+                        <span style="color: #6b7280;">Drift:</span>
+                        <span id="rtcDrift" style="color: #1f2937;">0s</span>
+                    </div>
+                </div>
+                <div class="switch-item" style="margin-top: 8px; background: white; padding: 6px; border-radius: 4px;">
+                    <span style="font-size: 11px;">Simulovat chybu RTC</span>
+                    <label class="switch">
+                        <input type="checkbox" id="rtcError" onchange="hardware.setRtcError(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- SD Card -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bfdbfe; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #0369a1; display: flex; align-items: center; gap: 6px;">
+                        <span>💾</span> SD Karta
+                    </div>
+                    <div id="sdCardStatusBadge" class="badge badge-success">Připojena</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                    <div>
+                        <span style="color: #6b7280;">Kapacita:</span>
+                        <span id="sdCardCapacity" style="color: #1f2937;">32 GB</span>
+                    </div>
+                    <div>
+                        <span style="color: #6b7280;">Volné:</span>
+                        <span id="sdCardFree" style="color: #1f2937;">28.5 GB</span>
+                    </div>
+                </div>
+                <div class="switch-item" style="margin-top: 8px; background: white; padding: 6px; border-radius: 4px;">
+                    <span style="font-size: 11px;">Simulovat odpojení SD</span>
+                    <label class="switch">
+                        <input type="checkbox" id="sdCardError" onchange="hardware.setSdCardError(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- RFID Readers (Cable Connected) -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #fef3c7; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #92400e; display: flex; align-items: center; gap: 6px;">
+                        <span>📡</span> RFID Readers (Wiegand)
+                    </div>
+                    <div id="rfidReadersStatusBadge" class="badge badge-success">4/4</div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11px;">
+                    <div
+                        style="padding: 6px; background: white; border-radius: 4px; display: flex; justify-content: space-between;">
+                        <span>RFID IN:</span>
+                        <span id="rfidInStatus" class="badge badge-success" style="font-size: 10px;">OK</span>
+                    </div>
+                    <div
+                        style="padding: 6px; background: white; border-radius: 4px; display: flex; justify-content: space-between;">
+                        <span>RFID OUT:</span>
+                        <span id="rfidOutStatus" class="badge badge-success" style="font-size: 10px;">OK</span>
+                    </div>
+                    <div
+                        style="padding: 6px; background: white; border-radius: 4px; display: flex; justify-content: space-between;">
+                        <span>NEST 1:</span>
+                        <span id="rfidNest1Status" class="badge badge-success" style="font-size: 10px;">OK</span>
+                    </div>
+                    <div
+                        style="padding: 6px; background: white; border-radius: 4px; display: flex; justify-content: space-between;">
+                        <span>NEST 2:</span>
+                        <span id="rfidNest2Status" class="badge badge-success" style="font-size: 10px;">OK</span>
+                    </div>
+                </div>
+                <div style="font-size: 10px; color: #92400e; margin-top: 6px; font-style: italic;">
+                    Připojeno kabelem (GPIO piny, Wiegand 26-bit protokol)
+                </div>
+            </div>
+
+            <!-- Egg Buttons (Nest Sensors) -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #991b1b; display: flex; align-items: center; gap: 6px;">
+                        <span>🥚</span> Egg Buttons
+                    </div>
+                    <div id="eggButtonsStatusBadge" class="badge badge-success">2/2</div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11px;">
+                    <div style="padding: 8px; background: white; border-radius: 4px; text-align: center;">
+                        <div style="margin-bottom: 4px;">Hnízdo 1</div>
+                        <div id="eggButton1Status" class="badge badge-secondary" style="font-size: 10px;">Idle
+                        </div>
+                        <button class="btn btn-danger btn-small" onclick="hardware.pressEggButton(1)"
+                            style="margin-top: 6px; width: 100%; font-size: 10px; padding: 4px;">
+                            🥚 Simulovat vejce
+                        </button>
+                    </div>
+                    <div style="padding: 8px; background: white; border-radius: 4px; text-align: center;">
+                        <div style="margin-bottom: 4px;">Hnízdo 2</div>
+                        <div id="eggButton2Status" class="badge badge-secondary" style="font-size: 10px;">Idle
+                        </div>
+                        <button class="btn btn-danger btn-small" onclick="hardware.pressEggButton(2)"
+                            style="margin-top: 6px; width: 100%; font-size: 10px; padding: 4px;">
+                            🥚 Simulovat vejce
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GSM Module SIM800L -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #f3f4f6; border-radius: 8px; border: 1px solid #d1d5db; margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #374151; display: flex; align-items: center; gap: 6px;">
+                        <span>📶</span> GSM SIM800L
+                    </div>
+                    <div id="gsmModuleStatusBadge" class="badge badge-success">OK</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                    <div>
+                        <span style="color: #6b7280;">UART:</span>
+                        <span id="gsmUartStatus" style="color: #1f2937;">GPIO 16/17</span>
+                    </div>
+                    <div>
+                        <span style="color: #6b7280;">Baud:</span>
+                        <span id="gsmBaudRate" style="color: #1f2937;">9600</span>
+                    </div>
+                </div>
+                <div class="switch-item" style="margin-top: 8px; background: white; padding: 6px; border-radius: 4px;">
+                    <span style="font-size: 11px;">Simulovat chybu GSM</span>
+                    <label class="switch">
+                        <input type="checkbox" id="gsmModuleError" onchange="hardware.setGsmError(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Pending Chickens (Unknown RFID Tags) -->
+            <div class="hardware-component"
+                style="padding: 12px; background: #fffbeb; border-radius: 8px; border: 1px solid #fde68a;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #b45309; display: flex; align-items: center; gap: 6px;">
+                        <span>🐔</span> Pending Chickens
+                    </div>
+                    <div id="pendingChickensCount" class="badge badge-warning">0</div>
+                </div>
+                <div id="pendingChickensList" style="font-size: 12px; color: #78350f;">
+                    <div style="text-align: center; padding: 8px; color: #9ca3af;">
+                        Žádné neznámé tagy
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-small" onclick="hardware.simulateUnknownTag()"
+                    style="width: 100%; margin-top: 8px; font-size: 11px;">
+                    🏷️ Simulovat neznámý RFID tag
+                </button>
+            </div>
+        </div>
+
+        <!-- Events Log Card -->
+        <div class="card">
+            <h2>📝 Event Log</h2>
+            <div class="event-log" id="eventLog">
+                <div class="event-item event-info">
+                    <span class="event-time">--:--:--</span>
+                    <span class="event-text">Čekám na připojení...</span>
+                </div>
+            </div>
+            <button class="btn btn-secondary btn-small" onclick="logger.clear()" style="margin-top: 10px;">
+                🗑️ Vymazat log
+                <div class="camera-modal-title" id="cameraModalTitle">📸 Fotografie</div>
+                <div class="camera-modal-subtitle" id="cameraModalSubtitle">-</div>
+        </div>
+        <button class="camera-modal-close" id="cameraModalClose">✖</button>
+    </div>
+    <div class="camera-modal-body">
+        <img id="cameraModalImage" alt="Snapshot detail" />
+        <div class="camera-modal-overlay" id="cameraModalVideoOverlay">▶️</div>
+    </div>
+    <div class="camera-modal-actions">
+        <button class="btn btn-danger" id="cameraModalDeleteBtn">🗑️ Smazat</button>
+        <button class="btn btn-secondary" id="cameraModalDownloadBtn">⬇️ Stáhnout</button>
+    </div>
+    </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="js/logger.js"></script>
+    <script src="js/credentials.js"></script>
+    <script src="js/deviceAuth.js"></script>
+    <script src="js/network.js"></script>
+    <script src="js/hardware.js"></script>
+    <script src="js/sensors.js"></script>
+    <script src="js/door.js"></script>
+    <script src="js/chickens.js"></script>
+    <script src="js/feeder.js"></script>
+    <script src="js/smart-counter.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/modules.js"></script>
+    <script src="js/system.js"></script>
+    <script src="js/simulator.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

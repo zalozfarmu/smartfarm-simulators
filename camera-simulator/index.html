@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-CAM Simulator</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="/shared/server-selector.css">
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <script src="/shared/config.js"></script>
+    <script src="/shared/server-selector.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>📹 ESP32-CAM Simulator</h1>
+                <p>Samostatný kamerový modul s WiFi připojením</p>
+            </div>
+            <div class="header-right">
+                <div class="header-nav">
+                    <a href="../index.html">🏠 Úvod</a>
+                    <a href="../mqtt-management/index.html">🔧 Management</a>
+                    <a href="../device-simulator/index.html">🤖 Device Sim</a>
+                    <a href="../mqtt-dashboard/index.html">📊 Dashboard</a>
+                </div>
+                <span id="cameraStatus" class="status-badge offline">⚫ OFFLINE</span>
+            </div>
+        </div>
+
+        <div class="server-status-banner" data-server-status></div>
+
+        <!-- Server Selector -->
+        <div id="serverSelector"></div>
+
+        <!-- Connection Card -->
+        <div class="card">
+            <h2>🔌 Připojení</h2>
+            
+            <div class="form-group">
+                <label>Camera ID</label>
+                <input type="text" id="cameraId" value="cam_001" placeholder="cam_001">
+                <small style="color: #6b7280; font-size: 12px;">📌 Unikátní identifikátor kamery</small>
+            </div>
+
+            <div class="form-group">
+                <label>Název kamery</label>
+                <input type="text" id="cameraName" value="ESP32-CAM Kurník" placeholder="ESP32-CAM Kurník">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Režim komunikace</label>
+                    <select id="communicationMode">
+                        <option value="gateway" selected>Přes gateway (device-simulator)</option>
+                        <option value="direct">Přímo na server (MQTT broker)</option>
+                    </select>
+                    <small style="color: #6b7280; font-size: 12px;">Vyberte, zda kamera mluví přímo se serverem nebo přes gateway.</small>
+                </div>
+                <div class="form-group" id="gatewayGroup" style="display: none;">
+                    <label>Gateway ID</label>
+                    <input type="text" id="gatewayId" value="coop-sn-001" placeholder="např. coop-sn-001">
+                    <small style="color: #6b7280; font-size: 12px;">ID zařízení/gateway, která přeposílá snímky na server.</small>
+                </div>
+            </div>
+
+            <div class="form-group" id="gatewayStatusRow" style="display: none;">
+                <label>Stav spojení s gateway</label>
+                <div id="gatewayStatus" class="badge badge-secondary">Neaktivní</div>
+                <small style="color: #6b7280; font-size: 12px;">Vyžaduje potvrzení handshake při režimu přes gateway.</small>
+            </div>
+
+            <div class="button-group" id="pairingButtons" style="display: flex; margin-bottom: 10px;">
+                <button class="btn btn-secondary" id="pairGatewayBtn" onclick="camera.startPairing()">🤝 Spárovat s gateway</button>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>MQTT Username</label>
+                    <input type="text" id="username" value="module_camera_CAM_001_coop-sn-001" placeholder="camera_001">
+                </div>
+                <div class="form-group">
+                    <label>MQTT Password</label>
+                    <input type="password" id="password" value="module_camera_CAM_001_coop-sn-001" placeholder="password">
+                </div>
+            </div>
+
+            <div class="button-group" style="justify-content: flex-start; gap: 10px;">
+                <button class="btn btn-secondary" id="openGatewayCredsBtn" type="button">🔑 Načíst heslo z gateway</button>
+            </div>
+
+            <div class="button-group">
+                <button id="connectBtn" class="btn btn-primary" onclick="camera.connect()">
+                    🔌 Připojit
+                </button>
+                <button id="disconnectBtn" class="btn btn-danger" onclick="camera.disconnect()" style="display: none;">
+                    🔌 Odpojit
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid">
+            <!-- Camera Preview Card -->
+            <div class="card camera-preview-card">
+                <h2>📸 Náhled kamery</h2>
+                
+                <div class="camera-preview">
+                    <canvas id="cameraCanvas" width="640" height="480"></canvas>
+                    <div class="camera-overlay" id="cameraOverlay">
+                        <div class="camera-overlay-icon">📹</div>
+                        <div class="camera-overlay-text">Kamera offline</div>
+                    </div>
+                </div>
+
+                <div class="camera-info">
+                    <div class="info-item">
+                        <span class="info-label">Rozlišení:</span>
+                        <span class="info-value" id="resolutionValue">640x480</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Kvalita:</span>
+                        <span class="info-value" id="qualityValue">90%</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">FPS:</span>
+                        <span class="info-value" id="fpsValue">0</span>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-success" onclick="camera.capturePhoto()" id="captureBtn" disabled>
+                        📸 Vyfotit
+                    </button>
+                    <button class="btn btn-primary" onclick="camera.startRecording()" id="recordBtn" disabled>
+                        ⏺️ Nahrávat
+                    </button>
+                    <button class="btn btn-danger" onclick="camera.stopRecording()" id="stopRecordBtn" style="display: none;">
+                        ⏹️ Zastavit
+                    </button>
+                </div>
+
+                <div class="recording-indicator" id="recordingIndicator" style="display: none;">
+                    <div class="recording-dot"></div>
+                    <span>Nahrávání probíhá...</span>
+                </div>
+            </div>
+
+            <!-- Settings Card -->
+            <div class="card">
+                <h2>⚙️ Nastavení</h2>
+
+                <div class="form-group">
+                    <label>Rozlišení</label>
+                    <select id="resolutionSelect" onchange="camera.setResolution(this.value)">
+                        <option value="320x240">320x240 (QVGA)</option>
+                        <option value="640x480" selected>640x480 (VGA)</option>
+                        <option value="800x600">800x600 (SVGA)</option>
+                        <option value="1024x768">1024x768 (XGA)</option>
+                        <option value="1280x720">1280x720 (HD)</option>
+                        <option value="1920x1080">1920x1080 (Full HD)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Kvalita JPEG (10-100)</label>
+                    <input type="range" id="qualityRange" min="10" max="100" value="90" 
+                           onchange="camera.setQuality(this.value)">
+                    <span id="qualityDisplay">90</span>
+                </div>
+
+                <div class="switch-item">
+                    <span>Auto-capture (každých 5 min)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="autoCapture" onchange="camera.toggleAutoCapture(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="switch-item">
+                    <span>Detekce pohybu (simulace)</span>
+                    <label class="switch">
+                        <input type="checkbox" id="motionDetection" onchange="camera.toggleMotionDetection(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Gallery Card -->
+            <div class="card gallery-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">🖼️ Galerie</h2>
+                    <span class="badge badge-secondary" id="galleryCount">0 snímků</span>
+                </div>
+
+                <div class="gallery-filters">
+                    <button class="filter-btn active" data-filter="all" onclick="camera.filterGallery('all')">Vše</button>
+                    <button class="filter-btn" data-filter="photo" onclick="camera.filterGallery('photo')">Fotky</button>
+                    <button class="filter-btn" data-filter="video" onclick="camera.filterGallery('video')">Videa</button>
+                </div>
+
+                <div class="gallery" id="gallery">
+                    <div class="gallery-empty">
+                        <div>📷</div>
+                        <p>Zatím žádné snímky</p>
+                        <small>Pořiďte první fotku pomocí tlačítka "Vyfotit"</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card">
+                <h2>📊 Status</h2>
+
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="status-icon">🔋</div>
+                        <div>
+                            <div class="status-label">Baterie</div>
+                            <div class="status-value" id="batteryValue">85%</div>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">📶</div>
+                        <div>
+                            <div class="status-label">Signál WiFi</div>
+                            <div class="status-value" id="signalValue">-45 dBm</div>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">💾</div>
+                        <div>
+                            <div class="status-label">Úložiště</div>
+                            <div class="status-value" id="storageValue">1.2 / 4 GB</div>
+                        </div>
+                    </div>
+
+                    <div class="status-item">
+                        <div class="status-icon">🌡️</div>
+                        <div>
+                            <div class="status-label">Teplota CPU</div>
+                            <div class="status-value" id="tempValue">42°C</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress-bar-container" style="margin-top: 15px;">
+                    <div class="progress-label">
+                        <span>Využití paměti</span>
+                        <span id="memoryPercent">45%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="memoryFill" style="width: 45%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log Card -->
+            <div class="card">
+                <h2>📝 Event Log</h2>
+                <div class="event-log" id="eventLog">
+                    <div class="event-item event-info">
+                        <span class="event-time">--:--:--</span>
+                        <span class="event-text">Čekám na připojení...</span>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-small" onclick="logger.clear()" style="margin-top: 10px;">
+                    🗑️ Vymazat log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Preview Modal -->
+    <div id="imageModal" class="modal">
+        <div class="modal-content image-modal-content">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="modalTitle">📸 Fotografie</div>
+                    <div class="modal-subtitle" id="modalSubtitle">-</div>
+                </div>
+                <button class="modal-close" onclick="camera.closeModal()">✖</button>
+            </div>
+            <div class="modal-body">
+                <img id="modalImage" alt="Preview" />
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="camera.downloadImage()">⬇️ Stáhnout</button>
+                <button class="btn btn-primary" onclick="camera.uploadToServer()">☁️ Nahrát na server</button>
+                <button class="btn btn-danger" onclick="camera.deleteImage()">🗑️ Smazat</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Gateway credentials -->
+    <div class="modal" id="gatewayCredsModal" style="display: none;">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2>🔑 Převzít heslo z gateway</h2>
+                <button class="modal-close" id="gatewayCredsClose">✖</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #6b7280; margin-bottom: 12px;">
+                    Zadejte MQTT údaje, které používá gateway (device-simulator), a přeneseme je sem.
+                </p>
+                <div class="form-group">
+                    <label>Gateway MQTT Username</label>
+                    <input type="text" id="gwUsername" placeholder="např. device_123">
+                </div>
+                <div class="form-group">
+                    <label>Gateway MQTT Password</label>
+                    <input type="password" id="gwPassword" placeholder="heslo gateway">
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn btn-secondary" id="gatewayCredsCancel" type="button">Zrušit</button>
+                <button class="btn btn-primary" id="gatewayCredsApply" type="button">✅ Přenést do kamery</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/logger.js"></script>
+    <script src="js/mqtt-client.js"></script>
+    <script src="js/image-capture.js"></script>
+    <script src="js/camera-device.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

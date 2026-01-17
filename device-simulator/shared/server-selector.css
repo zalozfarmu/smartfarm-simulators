@@ -1,0 +1,226 @@
+/**
+ * Server Selector Styles
+ * Sdílené styly pro server selector komponentu
+ */
+
+.server-selector-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+}
+
+.server-status-banner {
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #eef2ff, #f0fdf4);
+    color: #1f2937;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 13px;
+    align-items: center;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.server-status-pill {
+    background: #4f46e5;
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.server-status-detail {
+    color: #374151;
+}
+
+.server-selector-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.server-selector-icon {
+    font-size: 24px;
+}
+
+.server-selector-title {
+    margin: 0;
+    font-size: 18px;
+    color: #1f2937;
+}
+
+.server-selector-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.server-info {
+    background: #f9fafb;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 3px solid #3b82f6;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.info-item:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.info-value {
+    font-family: 'Courier New', monospace;
+    color: #3b82f6;
+    font-size: 12px;
+    background: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #e5e7eb;
+}
+
+.credentials-section,
+#customConfigSection {
+    background: #fef3c7;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 3px solid #f59e0b;
+}
+
+.credentials-section h4,
+#customConfigSection h4 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    color: #92400e;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group:last-child {
+    margin-bottom: 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    color: #374151;
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.form-control:read-only {
+    background: #f9fafb;
+    cursor: not-allowed;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
+    border: none;
+    background: #6b7280;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 5px;
+}
+
+.btn-small:hover {
+    background: #4b5563;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2563eb;
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+    .server-selector-card {
+        background: #1f2937;
+        color: #f9fafb;
+    }
+    
+    .server-selector-title {
+        color: #f9fafb;
+    }
+    
+    .server-info {
+        background: #374151;
+    }
+    
+    .info-value {
+        background: #1f2937;
+        color: #60a5fa;
+        border-color: #4b5563;
+    }
+    
+    .form-control {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .form-control:focus {
+        border-color: #60a5fa;
+    }
+}
+
