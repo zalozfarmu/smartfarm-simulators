@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartFarm MQTT - Úvodní stránka</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+
+        .apps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .app-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .app-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .app-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .app-description {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .app-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+            margin-top: 10px;
+        }
+
+        .badge-admin {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-user {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-dev {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐔 SmartFarm MQTT</h1>
+            <p>Kompletní ekosystém pro správu chytrých kurníků</p>
+        </div>
+
+        <div class="apps-grid">
+            <!-- Management Console -->
+            <a href="mqtt-management/index.html" class="app-card">
+                <div class="app-icon">🔧</div>
+                <div class="app-title">Management Console</div>
+                <div class="app-description">
+                    Administrace MQTT brokeru, správa uživatelů, zařízení a modulů. 
+                    Vytváření MQTT credentials pro nová zařízení.
+                </div>
+                <span class="app-badge badge-admin">Admin</span>
+            </a>
+
+            <!-- User Dashboard -->
+            <a href="mqtt-dashboard/index.html" class="app-card">
+                <div class="app-icon">🐔</div>
+                <div class="app-title">User Dashboard</div>
+                <div class="app-description">
+                    Real-time monitoring a ovládání kurníku. 
+                    Zobrazení stavu senzorů, dveří, slepic a odesílání příkazů.
+                </div>
+                <span class="app-badge badge-user">User</span>
+            </a>
+
+            <!-- Device Simulator -->
+            <a href="device-simulator/index.html" class="app-card">
+                <div class="app-icon">🤖</div>
+                <div class="app-title">Device Simulator</div>
+                <div class="app-description">
+                    Simulace fyzického ESP32 zařízení. 
+                    Testování MQTT komunikace, senzorů, dveří a RFID událostí.
+                </div>
+                <span class="app-badge badge-dev">Development</span>
+            </a>
+
+            <!-- Camera Simulator -->
+            <a href="camera-simulator/index.html" class="app-card">
+                <div class="app-icon">📹</div>
+                <div class="app-title">ESP32-CAM Simulator</div>
+                <div class="app-description">
+                    Samostatná kamera s WiFi, pairing přes gateway nebo přímé MQTT napojení. Test publikace snímků.
+                </div>
+                <span class="app-badge badge-dev">Development</span>
+            </a>
+        </div>
+
+        <div class="footer">
+            <p>
+                📚 <a href="README_MQTT_APPS.md" target="_blank">Dokumentace</a> | 
+                🐋 <a href="http://localhost:15672" target="_blank">RabbitMQ Management</a> | 
+                🐳 <a href="http://localhost:9443" target="_blank">Portainer</a>
+            </p>
+            <p style="margin-top: 10px; font-size: 14px;">
+                Spusťte: <code style="background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px;">python -m http.server 8888</code>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+
